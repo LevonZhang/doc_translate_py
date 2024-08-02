@@ -15,7 +15,7 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # 选择 Gemini Pro 模型
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 # Streamlit 应用标题
 st.title("Word 文档翻译")
@@ -31,7 +31,7 @@ bilingual = st.checkbox("双语对照模式", True)
 
 def translate_text(text):
     """使用 Google Gemini API 翻译文本"""
-    response = model(f"Translate the following text to {target_language}: {text}")
+    response = model.generate_content(f"Translate the following text to {target_language}: {text}")
     return response.text
 
 def translate_document(document):
