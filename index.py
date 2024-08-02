@@ -15,10 +15,10 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 # 选择 Gemini Pro 模型
-model = genai.get_model("gemini-pro")
+model = genai.GenerativeModel('gemini-pro')
 
 # Streamlit 应用标题
-st.title("Word 文档翻译 (使用 Gemini API)")
+st.title("Word 文档翻译")
 
 # 文件上传
 uploaded_file = st.file_uploader("上传 Word 文档 (.docx)", type=["docx"])
