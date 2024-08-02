@@ -31,9 +31,7 @@ bilingual = st.checkbox("双语对照模式", True)
 
 def translate_text(text):
     """使用 Google Gemini API 翻译文本"""
-    response = model.generate_content(
-        prompt=f"Translate the following text to {target_language}: {text}",
-    )
+    response = model(f"Translate the following text to {target_language}: {text}")
     return response.text
 
 def translate_document(document):
