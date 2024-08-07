@@ -40,19 +40,17 @@ total_elements = 0
 completed_elements = 0
 
 
-async def update_progress(increment=1):
+async def update_progress(completed):
     """更新进度条"""
-    global completed_elements
     async with progress_lock:
-        completed_elements += increment
-        progress = int((completed_elements / total_elements) * 100)
+        progress = int(completed)
         progress_bar.progress(progress, text=f"正在翻译... ({progress}%)")
 
 
 async def translate_text(texts):
     """使用 Google Gemini API 批量翻译文本"""
     # 设置最大 token 限制
-    max_tokens = 4000
+    max_tokens = 8000
 
     # 构建通用的 prompt
     prompt = f"""
@@ -64,6 +62,7 @@ async def translate_text(texts):
 
                 **Formatting instructions:**
                 - Do not add any extra line breaks, markdown formatting, numbering, or any other special formatting. 
+                - Please preserving all original formatting, including spaces, line breaks, and special characters such as tabs.
                 - Directly return a JSON array without any additional formatting. 
                 - Only return the translated texts in the following JSON format:
                 A JSON array where each element contains an "index" field and a "translation" field.
@@ -87,23 +86,32 @@ async def translate_text(texts):
 
     # 依次翻译每个批次
     translations = []
-    for batch in batches:
+    total_batches = len(batches)
+    for batch_index, batch in enumerate(batches):
+        # 计算当前批次的进度范围
+        batch_start = int(batch_index / total_batches * 100 + 1)
+        batch_end = int((batch_index + 1) / total_batches * 100)
+        await update_progress(batch_start + 20)  # 开始调用 Gemini API 前，设为起始值 + 20%
+
         batch_prompt = prompt  # 使用通用的 prompt
         for i, text in batch:
             batch_prompt += f"{i}. {text}\n"  # 添加文本内容
 
         response = model.generate_content(batch_prompt)
         batch_translations = response.text
+        await update_progress(batch_end - 10)  # 调用 Gemini API 后，设为结束值 - 10%
+
         # 移除 ```json ``` 包装
         if batch_translations.startswith("```json\n") and batch_translations.endswith("\n```"):
             batch_translations = batch_translations[8:-4].strip()
 
         # 使用 replace() 方法替换无效字符
-        # batch_translations = ''.join(c for c in batch_translations if c.isprintable())
+        batch_translations = ''.join(c for c in batch_translations if c.isprintable())
 
         try:
             batch_translations = json.loads(batch_translations)
             translations.extend(batch_translations)
+            await update_progress(batch_end)  # 处理完批次后，设为结束值
         except Exception as e:
             st.exception(e)  # 显示完整的错误堆栈
 
@@ -114,6 +122,12 @@ async def translate_text(texts):
 async def process_paragraph(paragraph, translations, paragraph_index):
     """处理单个段落，包含翻译和进度更新"""
     run = paragraph.runs[0]
+    for aRun in paragraph.runs:
+        original_text = aRun.text.strip()
+        if original_text:
+            run = aRun
+            break
+
     if bilingual:
         new_run = paragraph.add_run("\n"+translations[paragraph_index])
         if run:
@@ -125,13 +139,11 @@ async def process_paragraph(paragraph, translations, paragraph_index):
     else:
         paragraph.text = translations[paragraph_index]
         if run:
-           new_run = paragraph.runs[0]
-           new_run.font.bold = run.font.bold
-           new_run.font.italic = run.font.italic
-           new_run.font.underline = run.font.underline
-           new_run.font.color.rgb = run.font.color.rgb
-    await update_progress()
-
+           for new_run in paragraph.runs:
+               new_run.font.bold = run.font.bold
+               new_run.font.italic = run.font.italic
+               new_run.font.underline = run.font.underline
+               new_run.font.color.rgb = run.font.color.rgb
 
 async def translate_document(document):
     """使用 asyncio 异步翻译文档"""
@@ -142,7 +154,7 @@ async def translate_document(document):
     for paragraph in document.paragraphs:
         original_text = paragraph.text.strip()
         if original_text:
-            texts_to_translate.append(original_text)
+            texts_to_translate.append(paragraph.text)
             total_elements += 1
 
     for table in document.tables:
@@ -151,7 +163,7 @@ async def translate_document(document):
                 for paragraph in cell.paragraphs:
                     original_text = paragraph.text.strip()
                     if original_text:
-                        texts_to_translate.append(original_text)
+                        texts_to_translate.append(paragraph.text)
                         total_elements += 1
 
     completed_elements = 0
