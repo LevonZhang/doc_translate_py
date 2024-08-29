@@ -256,11 +256,10 @@ async def translate_document(document):
         part_end_paragraph = min(current_paragraph + paragraphs_per_part, total_paragraphs)
 
         progress_bar.progress(0, text=f"正在翻译第 {i+1}/{num_parts} 部分...")
-        translated_part = await translate_subdocument(
+        document = await translate_subdocument(
             document, current_paragraph, part_end_paragraph, start_progress, end_progress
         )
-        translated_parts.append(translated_part)
-
+        
         current_paragraph = part_end_paragraph
         start_progress = end_progress
 
