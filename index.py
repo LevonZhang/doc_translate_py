@@ -1,14 +1,27 @@
 import streamlit as st
 from docx import Document
+import google.generativeai as genai
 import os
 import asyncio
 import io
 import json
-import requests  # 引入 requests 库
+import typing_extensions as typing
+import tempfile
 
 # --- 全局变量 ---
-# Vercel 函数的 URL
-vercel_function_url = "https://ai-translate-gamma.vercel.app/api/translate"
+# 从 Vercel 环境变量中获取 API 密钥
+api_key = os.environ.get("GOOGLE_API_KEY")
+
+# 检查是否成功获取 API 密钥
+if not api_key:
+    st.error("未设置 GOOGLE_API_KEY 环境变量！")
+    st.stop()  # 停止应用加载
+
+class translatePair(typing.TypedDict):
+    index: str
+    translation: str
+
+# --- 全局变量 ---
 
 # Streamlit 应用标题
 st.title("Word 文档翻译")
@@ -17,30 +30,63 @@ st.title("Word 文档翻译")
 uploaded_file = st.file_uploader("上传 Word 文档 (.docx)", type=["docx"])
 
 # 目标语言选择
-target_language = st.selectbox("选择目标语言", ["zh-CN", "en", "ja", "ko", "fr", "de", "es"])
+target_language = st.selectbox(
+    "选择目标语言", ["zh-CN", "en", "ja", "ko", "fr", "de", "es"]
+)
 
 # 双语模式选择
 bilingual = st.checkbox("双语对照模式", False)
 
 # --- 翻译进度条 ---
 progress_bar = st.progress(0, text="准备翻译...")
-progress_lock = asyncio.Lock() 
-total_elements = 0
-completed_elements = 0
+progress_lock = asyncio.Lock()
 
+# 设置 API 密钥
+genai.configure(api_key=api_key)
+
+# 选择 Gemini Pro 模型
+model = genai.GenerativeModel(
+    "gemini-1.5-flash",
+    generation_config={
+        "response_mime_type": "application/json",
+        "response_schema": list[translatePair],
+    },
+)
 
 async def update_progress(completed):
     """更新进度条"""
     async with progress_lock:
         progress = int(completed)
-        progress_bar.progress(progress, text=f"正在翻译... ({progress}%)")
+        progress_bar.progress(progress, text=f"已完成 ({progress}%)...")
 
 
-async def translate_text(texts):
+async def translate_text(texts, start_progress, end_progress):
     """使用 Google Gemini API 批量翻译文本"""
     # 设置最大 token 限制
     max_tokens = 8000
 
+    # 构建通用的 prompt
+    prompt = f"""
+                Translate the following texts to {target_language}, paying close attention to the context and ensuring accuracy. Double-check for any potentially ambiguous words or phrases and choose the most appropriate translation. 
+
+
+                **Examples of potential ambiguities:**
+                - If the word "charge" refers to billing, ensure it is not translated as "charging" (as in electricity).
+
+                **Formatting instructions:**
+                - Do not add any extra line breaks, markdown formatting, numbering, or any other special formatting. 
+                - Please preserving all original formatting, including spaces, line breaks, and special characters such as tabs.
+                - Directly return a JSON array without any additional formatting. 
+                - Make sure the output is a complete and valid JSON array.
+
+                Only return the translated texts in the following JSON format:
+                [
+                  {{"index": "0", "translation": "Translated text 1"}},
+                  {{"index": "1", "translation": "Translated text 2"}}
+                ]
+
+                Please translate the following texts:
+                """
     # 将文本列表分割成多个批次，每个批次的 token 数量不超过最大限制
     batches = []
     current_batch = []
@@ -56,135 +102,168 @@ async def translate_text(texts):
     if current_batch:
         batches.append(current_batch)
 
-# 并发地翻译每个批次
-    async def translate_batch(batch, batch_index, total_batches):
-        print(f"正在翻译第{batch_index}批。。。。。。")
-        batch_start = int(batch_index * 100 / total_batches)
-        await update_progress(int(batch_start + 0.2 * (100 / total_batches)))
-        batch_prompt = ""
-        for i, text in batch:
-            batch_prompt += f"{i}. {text}\n"
-
-        batch_translations = []
-        
-        request_data = {"texts": texts, "target_language": target_language}
-        try:
-            # 发送 POST 请求到 Vercel 函数
-            response = requests.post(vercel_function_url, json=request_data)
-
-            # 检查响应状态码
-            response.raise_for_status()
-
-            # 解析 JSON 响应
-            batch_translations = response.json()
-            await update_progress(int(batch_start + 0.9 * (100 / total_batches)))
-            return batch_translations
-        except requests.exceptions.RequestException as e:
-            st.error(f"翻译时出错: {e}")
-            st.exception(e)  # 显示完整的错误堆栈
-            return []
-
-    # 创建异步任务列表
-    tasks = [
-        translate_batch(batch, batch_index, len(batches))
-        for batch_index, batch in enumerate(batches)
-    ]
-
-    # 并发执行所有任务
-    results = await asyncio.gather(*tasks)
-
-    # 合并所有翻译结果
+    # 依次翻译每个批次
     translations = []
-    for result in results:
-        translations.extend(result)
+    total_batches = len(batches)
+    max_retries = 5  # 设置最大重试次数
+    # 创建一个空的 Streamlit 组件，用于存储错误信息
+    error_message = st.empty() 
+    for batch_index, batch in enumerate(batches):
+        retry_count = 0
+        # 计算当前批次的进度范围
+        batch_start = int(batch_index / total_batches * 100)
+        batch_end = int((batch_index + 1) / total_batches * 100)
 
-    translations.sort(key=lambda x: int(x['index']))  # 将 index 转换为整数
-    return [t['translation'].rstrip() for t in translations]
+        # 计算实际进度范围
+        actual_start = start_progress + batch_start * (end_progress - start_progress) / 100
+        actual_end = start_progress + batch_end * (end_progress - start_progress) / 100
+
+        batch_size = actual_end - actual_start
+        await update_progress(actual_start + 0.2 * batch_size)
+
+        batch_prompt = prompt  # 使用通用的 prompt
+        for i, text in batch:
+            batch_prompt += f"{i}. {text}\n"  # 添加文本内容
+
+        while retry_count < max_retries:
+            try:
+                response = model.generate_content(batch_prompt)
+                batch_translations = response.text
+                await update_progress(actual_start + 0.9 * batch_size)
+
+                # 移除 ```json ``` 包装
+                if batch_translations.startswith("```json\n") and batch_translations.endswith("\n```"):
+                    batch_translations = batch_translations[8:-4].strip()
+
+                # 使用 replace() 方法替换无效字符
+                batch_translations = ''.join(
+                    c for c in batch_translations if c.isprintable()
+                )
+
+                batch_translations = json.loads(batch_translations)
+                translations.extend(batch_translations)
+                await update_progress(actual_end)
+                error_message.empty()  # 清除错误信息
+                break  # 翻译成功，退出循环
+            except Exception as e:
+                retry_count += 1
+                error_message.warning(
+                    f"批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试..."
+                )
+                print(f"{batch_translations},批次号{batch_index}")
+                # st.exception(e)  # 显示完整的错误堆栈
+                await asyncio.sleep(1)  # 等待 1 秒再重试
+
+        if retry_count == max_retries:
+            error_message.error(
+                f"批次 {batch_index + 1} 翻译失败，已达到最大重试次数 ({max_retries})"
+            )
+            raise Exception(f"批次 {batch_index + 1} 翻译失败")  # 抛出异常
+
+    translations.sort(key=lambda x: int(x["index"]))  # 将 index 转换为整数
+    return [t["translation"].rstrip() for t in translations]
 
 
 async def process_paragraph(paragraph, translations, paragraph_index):
     """处理单个段落，包含翻译和进度更新"""
-    run = paragraph.runs[0]
-    for aRun in paragraph.runs:
-        original_text = aRun.text.strip()
-        if original_text:
-            run = aRun
-            break
+    if paragraph.runs:  # 检查段落中是否有 Run
+        # 找到第一个有文本内容的 Run
+        for run in paragraph.runs:
+            if run:
+                break
+        else:
+            # 如果没有找到有文本内容的 Run，则跳过该段落
+            return
 
-    if bilingual:
-        new_run = paragraph.add_run("\n"+translations[paragraph_index])
-        if run:
+        if bilingual:
+            new_run = paragraph.add_run("\n" + translations[paragraph_index])
             # 在 translations 中查找对应的翻译结果
             new_run.font.bold = run.font.bold
             new_run.font.italic = run.font.italic
             new_run.font.underline = run.font.underline
             new_run.font.color.rgb = run.font.color.rgb
-    else:
-        paragraph.text = translations[paragraph_index]
-        if run:
-           for new_run in paragraph.runs:
-               new_run.font.bold = run.font.bold
-               new_run.font.italic = run.font.italic
-               new_run.font.underline = run.font.underline
-               new_run.font.color.rgb = run.font.color.rgb
+        else:            
+            try:
+                paragraph.text = translations[paragraph_index]
+            except IndexError as e:
+                st.error(f"翻译过程中出现错误：{e}")
+                st.exception(e)
+                st.write(f"paragraph_index: {paragraph_index}, len(translations): {len(translations)}, translations: {translations}")  # 打印调试信息
+            if run:
+               for new_run in paragraph.runs:
+                   new_run.font.bold = run.font.bold
+                   new_run.font.italic = run.font.italic
+                   new_run.font.underline = run.font.underline
+                   new_run.font.color.rgb = run.font.color.rgb
 
-async def translate_document(document):
-    """使用 asyncio 异步翻译文档"""
+async def translate_subdocument(document, start_paragraph, end_paragraph, start_progress, end_progress):
+    """翻译文档的一部分"""
     global total_elements, completed_elements
-    total_elements = 0
+    total_elements = end_paragraph - start_paragraph
     texts_to_translate = []
 
-    for paragraph in document.paragraphs:
+    for i in range(start_paragraph, end_paragraph):
+        paragraph = document.paragraphs[i]
         original_text = paragraph.text.strip()
         if original_text:
             texts_to_translate.append(paragraph.text)
-            total_elements += 1
-
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    original_text = paragraph.text.strip()
-                    if original_text:
-                        texts_to_translate.append(paragraph.text)
-                        total_elements += 1
 
     completed_elements = 0
 
-    translations = await translate_text(texts_to_translate)
+    translations = await translate_text(texts_to_translate, start_progress, end_progress)
 
-    # 检查 translations 是否为空
-    if not translations:
-        st.error("翻译结果为空！")
-        st.exception(Exception("翻译结果为空"))  # 抛出异常并显示堆栈信息
-        return
-
-    tasks = []
     current_paragraph_index = 0
-    for paragraph in document.paragraphs:
+    for i in range(start_paragraph, end_paragraph):
+        paragraph = document.paragraphs[i]
         original_text = paragraph.text.strip()
         if original_text:
-            tasks.append(
-                asyncio.create_task(
-                    process_paragraph(paragraph, translations, current_paragraph_index)
-                )
-            )
+            await process_paragraph(paragraph, translations, current_paragraph_index)
             current_paragraph_index += 1
 
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    original_text = paragraph.text.strip()
-                    if original_text:
-                        tasks.append(
-                            asyncio.create_task(
-                                process_paragraph(paragraph, translations, current_paragraph_index)
-                            )
-                        )
-                        current_paragraph_index += 1
+    return document
 
-    await asyncio.gather(*tasks)
+
+async def translate_document(document):
+    """将文档分割成多个部分并翻译"""
+    # 设置每个部分的最大字节大小
+    max_part_size = 1024 * 1024  # 1MB
+
+    # 获取文档内容的字节大小
+    doc_content = io.BytesIO()
+    document.save(doc_content)
+    doc_size = doc_content.tell()
+
+    # 如果文档大小小于 1MB，则不需要分割
+    if doc_size < max_part_size:
+        return await translate_subdocument(document, 0, len(document.paragraphs), 0, 100)
+
+    # 估算平均段落大小
+    total_paragraphs = len(document.paragraphs)
+    average_paragraph_size = doc_size / total_paragraphs
+
+    # 计算每个部分的段落数
+    paragraphs_per_part = int(max_part_size / average_paragraph_size)
+
+    # 计算需要分割的份数
+    num_parts = (total_paragraphs + paragraphs_per_part - 1) // paragraphs_per_part
+
+    translated_parts = []
+    current_paragraph = 0
+    start_progress = 0
+    for i in range(num_parts):
+        end_progress = int((i + 1) / num_parts * 100)
+        # 计算当前部分的结束段落索引
+        part_end_paragraph = min(current_paragraph + paragraphs_per_part, total_paragraphs)
+
+        progress_bar.progress(0, text=f"正在翻译第 {i+1}/{num_parts} 部分...")
+        translated_part = await translate_subdocument(
+            document, current_paragraph, part_end_paragraph, start_progress, end_progress
+        )
+        translated_parts.append(translated_part)
+
+        current_paragraph = part_end_paragraph
+        start_progress = end_progress
+
     return document
 
 
