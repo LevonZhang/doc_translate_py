@@ -179,7 +179,7 @@ async def process_paragraph(paragraph, translations, paragraph_index):
         if bilingual:
             # 在 translations 中查找对应的翻译结果
             translated_text = next(
-                (t["translation"].rstrip() for t in translations if t["paragraph_index"] == paragraph_index), 
+                (t["translation"].rstrip() for t in translations if int(t["paragraph_index"]) == paragraph_index), 
                 None,
             )
             if translated_text:
@@ -192,7 +192,7 @@ async def process_paragraph(paragraph, translations, paragraph_index):
             try:
                 # 在 translations 中查找对应的翻译结果，使用 paragraph_index 作为索引
                 translated_text = next(
-                    (t["translation"].rstrip() for t in translations if t["paragraph_index"] == paragraph_index),
+                    (t["translation"].rstrip() for t in translations if int(t["paragraph_index"]) == paragraph_index),
                     None,
                 )
                 if translated_text:
