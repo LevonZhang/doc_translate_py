@@ -14,7 +14,7 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 
 # 检查是否成功获取 API 密钥
 if not api_key:
-    st.error("未设置 GOOGLE_API_KEY 环境变量！")
+    st.error("GOOGLE_API_KEY environment variable is not set!")
     st.stop()  # 停止应用加载
 
 class translatePair(typing.TypedDict):
@@ -25,21 +25,21 @@ class translatePair(typing.TypedDict):
 # --- 全局变量 ---
 
 # Streamlit 应用标题
-st.title("Word 文档翻译")
+st.title("Word Document Translation")
 
 # 文件上传
-uploaded_file = st.file_uploader("上传 Word 文档 (.docx)", type=["docx"])
+uploaded_file = st.file_uploader("Upload Word Document (.docx)", type=["docx"])
 
 # 目标语言选择
 target_language = st.selectbox(
-    "选择目标语言", ["zh-CN", "en", "ja", "ko", "fr", "de", "es"]
+    "Select Target Language", ["zh-CN", "en", "ja", "ko", "fr", "de", "es"]
 )
 
 # 双语模式选择
-bilingual = st.checkbox("双语对照模式", False)
+bilingual = st.checkbox("Bilingual Mode", False)
 
 # --- 翻译进度条 ---
-progress_bar = st.progress(0, text="准备翻译...")
+progress_bar = st.progress(0, text="Preparing to translate...")
 progress_lock = asyncio.Lock()
 
 # 设置 API 密钥
@@ -58,7 +58,7 @@ async def update_progress(completed):
     """更新进度条"""
     async with progress_lock:
         progress = int(completed)
-        progress_bar.progress(progress, text=f"已完成 ({progress}%)...")
+        progress_bar.progress(progress, text=f"Completed ({progress}%)...")
 
 
 async def translate_text(texts, start_progress, end_progress):
@@ -149,13 +149,13 @@ async def translate_text(texts, start_progress, end_progress):
                 break  # 翻译成功，退出循环
             except Exception as e:
                 retry_count += 1
-                st.warning(f"批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试...")  # 显示完整的错误堆栈
+                st.warning(f"Error parsing JSON for batch {batch_index + 1} , retrying attempt {retry_count} ...")  # 显示完整的错误堆栈
                 
         if retry_count == max_retries:
             error_message.error(
-                f"批次 {batch_index + 1} 翻译失败，已达到最大重试次数 ({max_retries})"
+                f"Batch {batch_index + 1} translation failed, maximum retries ({max_retries}) reached"
             )
-            raise Exception(f"批次 {batch_index + 1} 翻译失败")  # 抛出异常
+            raise Exception(f"Batch {batch_index + 1} translation failed")  # 抛出异常
 
     translations.sort(key=lambda x: int(x["index"]))  # 将 index 转换为整数
     return translations
@@ -259,12 +259,9 @@ async def translate_document(document):
         end_progress = int((i + 1) / num_parts * 100)
         # 计算当前部分的结束段落索引
         part_end_paragraph = min(current_paragraph + paragraphs_per_part, total_paragraphs)
-
-        progress_bar.progress(0, text=f"正在翻译第 {i+1}/{num_parts} 部分...")
         document = await translate_subdocument(
             document, current_paragraph, part_end_paragraph, start_progress, end_progress
         )
-        
         current_paragraph = part_end_paragraph
         start_progress = end_progress
 
@@ -287,11 +284,11 @@ if st.button("开始翻译") and uploaded_file is not None:
 
         # 提供下载链接
         st.download_button(
-            label="下载翻译后的文档",
+            label="Download",
             data=output.getvalue(),
-            file_name=f"translated_{uploaded_file.name}",
+            file_name=f"Translated_{uploaded_file.name}",
         )
 
     except Exception as e:
-        st.error(f"错误：{e}")
+        st.error(f"Error during translation：{e}")
         st.exception(e)  # 显示完整的错误堆栈
