@@ -124,7 +124,7 @@ async def translate_text(texts, start_progress, end_progress):
 
         batch_prompt = prompt  # 使用通用的 prompt
         for i, paragraph_index, text in batch:  # 获取段落索引
-            batch_prompt += f'{{"index": "{i}", "paragraph_index": "{paragraph_index}", "translation": "{text}"}}\n'  # 添加段落索引到 JSON
+            batch_prompt += f'{{"index": {i}, "paragraph_index": {paragraph_index}, "translation": "{text}"}}\n'  # 添加段落索引到 JSON
 
         while retry_count < max_retries:
             try:
