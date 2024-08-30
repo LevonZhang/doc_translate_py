@@ -198,9 +198,9 @@ async def process_paragraph(paragraph, translations, paragraph_index):
                 if translated_text:
                     paragraph.text = translated_text
             except IndexError as e:
-                st.error(f"翻译过程中出现错误：{e}")
-                st.exception(e)
+                st.error(f"替换翻译文本出现错误：{e}")
                 st.error(f"paragraph_index: {paragraph_index}, len(translations): {len(translations)}, translations: {translations}")  # 打印调试信息
+                st.exception(e)
             if run:
                for new_run in paragraph.runs:
                    new_run.font.bold = run.font.bold
@@ -298,5 +298,5 @@ if st.button("开始翻译") and uploaded_file is not None:
         )
 
     except Exception as e:
-        st.error(f"翻译过程中出现错误：{e}")
+        st.error(f"错误：{e}")
         st.exception(e)  # 显示完整的错误堆栈
