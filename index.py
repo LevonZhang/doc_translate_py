@@ -198,10 +198,10 @@ async def process_paragraph(paragraph, translations, paragraph_index):
                 if translated_text:
                     paragraph.text = translated_text
             except Exception as e:
-                print(f"替换翻译文本出现错误：{e} \n paragraph_index: {paragraph_index}, \n translations: {translations}")
+                # print(f"替换翻译文本出现错误：{e} \n paragraph_index: {paragraph_index}, \n translations: {translations}")
                 st.error(f"替换翻译文本出现错误：{e} \n paragraph_index: {paragraph_index}, \n translations: {translations}")
                 # st.error(f", len(translations): {len(translations)}, ")  # 打印调试信息
-                # st.exception(e)
+                st.exception(e)
             if run:
                for new_run in paragraph.runs:
                    new_run.font.bold = run.font.bold
