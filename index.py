@@ -269,8 +269,11 @@ async def translate_document(document):
 
 
 # 翻译按钮
-if st.button("Translate Now") and uploaded_file is not None:
+if st.button("Translate Now", disabled=is_translating) and uploaded_file is not None:
     try:
+        # 设置翻译状态为 True
+        is_translating = True
+        
         # 读取 Word 文档
         doc = Document(uploaded_file)
 
@@ -292,3 +295,7 @@ if st.button("Translate Now") and uploaded_file is not None:
     except Exception as e:
         st.error(f"Error during translation：{e}")
         st.exception(e)  # 显示完整的错误堆栈
+        
+    finally:
+        # 设置翻译状态为 False
+        is_translating = False
