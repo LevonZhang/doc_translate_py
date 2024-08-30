@@ -19,6 +19,7 @@ if not api_key:
 
 class translatePair(typing.TypedDict):
     index: str
+    paragraph_index: str
     translation: str
 
 # --- 全局变量 ---
@@ -63,7 +64,7 @@ async def update_progress(completed):
 async def translate_text(texts, start_progress, end_progress):
     """使用 Google Gemini API 批量翻译文本"""
     # 设置最大 token 限制
-    max_tokens = 8000
+    max_tokens = 15000
 
     # 构建通用的 prompt
     prompt = f"""
@@ -81,8 +82,8 @@ async def translate_text(texts, start_progress, end_progress):
 
                 Only return the translated texts in the following JSON format:
                 [
-                  {{"index": "0", "translation": "Translated text 1"}},
-                  {{"index": "1", "translation": "Translated text 2"}}
+                  {{"index": "0", "paragraph_index":"0", "translation": "Translated text 1"}},
+                  {{"index": "1", "paragraph_index":"1", "translation": "Translated text 2"}}
                 ]
 
                 Please translate the following texts:
@@ -91,13 +92,13 @@ async def translate_text(texts, start_progress, end_progress):
     batches = []
     current_batch = []
     current_tokens = 0
-    for i, text in enumerate(texts):
+    for i, (paragraph_index, text) in enumerate(texts):  # 获取段落索引
         text_tokens = len(text)
         if current_tokens + text_tokens > max_tokens:
             batches.append(current_batch)
             current_batch = []
             current_tokens = 0
-        current_batch.append((i, text))
+        current_batch.append((i, paragraph_index, text))  # 存储段落索引、批次索引和文本
         current_tokens += text_tokens
     if current_batch:
         batches.append(current_batch)
@@ -122,8 +123,8 @@ async def translate_text(texts, start_progress, end_progress):
         await update_progress(actual_start + 0.2 * batch_size)
 
         batch_prompt = prompt  # 使用通用的 prompt
-        for i, text in batch:
-            batch_prompt += f"{i}. {text}\n"  # 添加文本内容
+        for i, paragraph_index, text in batch:  # 获取段落索引
+            batch_prompt += f'{{"index": "{i}", "paragraph_index": "{paragraph_index}", "translation": "{text}"}}\n'  # 添加段落索引到 JSON
 
         while retry_count < max_retries:
             try:
@@ -176,15 +177,26 @@ async def process_paragraph(paragraph, translations, paragraph_index):
             return
 
         if bilingual:
-            new_run = paragraph.add_run("\n" + translations[paragraph_index])
             # 在 translations 中查找对应的翻译结果
-            new_run.font.bold = run.font.bold
-            new_run.font.italic = run.font.italic
-            new_run.font.underline = run.font.underline
-            new_run.font.color.rgb = run.font.color.rgb
+            translated_text = next(
+                (t["translation"].rstrip() for t in translations if t["paragraph_index"] == str(paragraph_index)), 
+                None,
+            )
+            if translated_text:
+                new_run = paragraph.add_run("\n" + translated_text)
+                new_run.font.bold = run.font.bold
+                new_run.font.italic = run.font.italic
+                new_run.font.underline = run.font.underline
+                new_run.font.color.rgb = run.font.color.rgb
         else:            
             try:
-                paragraph.text = translations[paragraph_index]
+                # 在 translations 中查找对应的翻译结果，使用 paragraph_index 作为索引
+                translated_text = next(
+                    (t["translation"].rstrip() for t in translations if t["paragraph_index"] == str(paragraph_index)),
+                    None,
+                )
+                if translated_text:
+                    paragraph.text = translated_text
             except IndexError as e:
                 st.error(f"翻译过程中出现错误：{e}")
                 st.exception(e)
@@ -206,19 +218,17 @@ async def translate_subdocument(document, start_paragraph, end_paragraph, start_
         paragraph = document.paragraphs[i]
         original_text = paragraph.text.strip()
         if original_text:
-            texts_to_translate.append(paragraph.text)
+            texts_to_translate.append((i, paragraph.text))
 
     completed_elements = 0
 
     translations = await translate_text(texts_to_translate, start_progress, end_progress)
 
-    current_paragraph_index = 0
     for i in range(start_paragraph, end_paragraph):
         paragraph = document.paragraphs[i]
         original_text = paragraph.text.strip()
         if original_text:
-            await process_paragraph(paragraph, translations, current_paragraph_index)
-            current_paragraph_index += 1
+            await process_paragraph(paragraph, translations, i)
 
     return document
 
