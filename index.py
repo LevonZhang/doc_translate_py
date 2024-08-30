@@ -199,7 +199,7 @@ async def process_paragraph(paragraph, translations, paragraph_index):
                 if translated_text:
                     paragraph.text = translated_text
             except Exception as e:
-                st.error(translations[len(translations)-1])
+                st.error(translations)
                 st.exception(e)
                 raise e  # 抛出异常
             if run:
