@@ -64,7 +64,7 @@ async def update_progress(completed):
 async def translate_text(texts, start_progress, end_progress):
     """使用 Google Gemini API 批量翻译文本"""
     # 设置最大 token 限制
-    max_tokens = 15000
+    max_tokens = 10000
 
     # 构建通用的 prompt
     prompt = f"""
