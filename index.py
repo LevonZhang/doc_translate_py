@@ -149,7 +149,7 @@ async def translate_text(texts, start_progress, end_progress):
                 break  # 翻译成功，退出循环
             except Exception as e:
                 retry_count += 1
-                st.warning(批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试...)  # 显示完整的错误堆栈
+                st.warning(f"批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试...")  # 显示完整的错误堆栈
                 
         if retry_count == max_retries:
             error_message.error(
