@@ -148,11 +148,11 @@ async def translate_text(texts, start_progress, end_progress):
                 break  # 翻译成功，退出循环
             except Exception as e:
                 retry_count += 1
-                error_message.warning(
-                    f"批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试..."
-                )
-                print(f"{batch_translations}  批次号{batch_index}")
-                # st.exception(e)  # 显示完整的错误堆栈
+                # error_message.warning(
+                #     f"批次 {batch_index + 1} 解析 JSON 时出错，正在尝试第 {retry_count} 次重试..."
+                # )
+                # print(f"{batch_translations}  批次号{batch_index}")
+                st.exception(e)  # 显示完整的错误堆栈
                 await asyncio.sleep(1)  # 等待 1 秒再重试
 
         if retry_count == max_retries:
