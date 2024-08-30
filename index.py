@@ -78,10 +78,10 @@ async def translate_text(texts, start_progress, end_progress):
                 - Do not add any extra line breaks, markdown formatting, numbering, or any other special formatting. 
                 - Please preserving all original formatting, including spaces, line breaks, and special characters such as tabs.
                 - Directly return a JSON array without any additional formatting. 
-                - **The returned object must strictly adhere to the following JSON format.  It is absolutely forbidden to return only the translated text directly.**
+                - The returned object must strictly adhere to the following JSON format, each object in array must include index, paragraph_index and translation.  It is absolutely forbidden to return only the translated text directly.
                 - Make sure the output is a complete and valid JSON array.
 
-                Only return the translated texts in the following JSON format:
+                Only return the result in the following JSON format:
                 [
                   {{"index": "0", "paragraph_index":"0", "translation": "Translated text 1"}},
                   {{"index": "1", "paragraph_index":"1", "translation": "Translated text 2"}}
