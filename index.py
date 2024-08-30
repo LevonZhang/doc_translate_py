@@ -267,6 +267,8 @@ async def translate_document(document):
 
     return document
 
+# 初始化翻译状态
+is_translating = False
 
 # 翻译按钮
 if st.button("Translate Now", disabled=is_translating) and uploaded_file is not None:
