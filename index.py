@@ -269,7 +269,7 @@ async def translate_document(document):
 
 
 # 翻译按钮
-if st.button("开始翻译") and uploaded_file is not None:
+if st.button("Translate Now") and uploaded_file is not None:
     try:
         # 读取 Word 文档
         doc = Document(uploaded_file)
