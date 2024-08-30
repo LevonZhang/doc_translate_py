@@ -127,7 +127,6 @@ async def translate_text(texts, start_progress, end_progress):
         for i, paragraph_index, text in batch:  # 获取段落索引
             batch_prompt += f'{{"index": {i}, "paragraph_index": {paragraph_index}, "translation": "{text}"}}\n'  # 添加段落索引到 JSON
         
-        st.info(batch_prompt)
         while retry_count < max_retries:
             try:
                 response = model.generate_content(batch_prompt)
@@ -145,7 +144,6 @@ async def translate_text(texts, start_progress, end_progress):
 
                 batch_translations = json.loads(batch_translations)
                 translations.extend(batch_translations)
-                st.info(translations)
                 await update_progress(actual_end)
                 error_message.empty()  # 清除错误信息
                 break  # 翻译成功，退出循环
@@ -165,7 +163,7 @@ async def translate_text(texts, start_progress, end_progress):
             raise Exception(f"批次 {batch_index + 1} 翻译失败")  # 抛出异常
 
     translations.sort(key=lambda x: int(x["index"]))  # 将 index 转换为整数
-    return [t["translation"].rstrip() for t in translations]
+    return translations
 
 
 async def process_paragraph(paragraph, translations, paragraph_index):
@@ -201,7 +199,6 @@ async def process_paragraph(paragraph, translations, paragraph_index):
                 if translated_text:
                     paragraph.text = translated_text
             except Exception as e:
-                st.error(translations)
                 st.exception(e)
                 raise e  # 抛出异常
             if run:
