@@ -78,10 +78,10 @@ async def translate_text(texts, start_progress, end_progress):
                 - Do not add any extra line breaks, markdown formatting, numbering, or any other special formatting. 
                 - Please preserving all original formatting, including spaces, line breaks, and special characters such as tabs.
                 - Directly return a JSON array without any additional formatting. 
-                - The returned object must strictly adhere to the following JSON format, each object in array must include index, paragraph_index and translation.  It is absolutely forbidden to return only the translated text directly.
+                - The returned JSON array must strictly adhere to the following JSON format, each object in array must include index, paragraph_index and translation.  It is absolutely forbidden to return only the translated text directly.
                 - Make sure the output is a complete and valid JSON array.
 
-                Only return the result in the following JSON format:
+                Only return the result in the following JSON format,replace translation value with the translated text :
                 [
                   {{"index": "0", "paragraph_index":"0", "translation": "Translated text 1"}},
                   {{"index": "1", "paragraph_index":"1", "translation": "Translated text 2"}}
@@ -126,7 +126,8 @@ async def translate_text(texts, start_progress, end_progress):
         batch_prompt = prompt  # 使用通用的 prompt
         for i, paragraph_index, text in batch:  # 获取段落索引
             batch_prompt += f'{{"index": {i}, "paragraph_index": {paragraph_index}, "translation": "{text}"}}\n'  # 添加段落索引到 JSON
-
+        
+        st.info(batch_prompt)
         while retry_count < max_retries:
             try:
                 response = model.generate_content(batch_prompt)
@@ -144,6 +145,7 @@ async def translate_text(texts, start_progress, end_progress):
 
                 batch_translations = json.loads(batch_translations)
                 translations.extend(batch_translations)
+                st.info(translations)
                 await update_progress(actual_end)
                 error_message.empty()  # 清除错误信息
                 break  # 翻译成功，退出循环
