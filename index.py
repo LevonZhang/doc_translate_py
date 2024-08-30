@@ -237,7 +237,7 @@ async def translate_subdocument(document, start_paragraph, end_paragraph, start_
 async def translate_document(document):
     """将文档分割成多个部分并翻译"""
     # 设置每个部分的最大字节大小
-    max_part_size = 1024 * 1024 / 10  # 1MB
+    max_part_size = 1024 * 1024  # 1MB
 
     # 获取文档内容的字节大小
     doc_content = io.BytesIO()
