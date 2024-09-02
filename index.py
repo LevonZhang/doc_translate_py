@@ -8,15 +8,14 @@ import json
 import typing_extensions as typing
 
 # Add custom CSS to hide the GitHub icon
-st.markdown(
-    r"""
-    <style>
-        [data-testid="stStatusWidget"] {
-            visibility: hidden;
-        }
-    </style>
-    """, unsafe_allow_html=True
-)
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 
 # --- 全局变量 ---
 # 从 Vercel 环境变量中获取 API 密钥
