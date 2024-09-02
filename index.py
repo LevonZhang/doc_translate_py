@@ -7,6 +7,14 @@ import io
 import json
 import typing_extensions as typing
 
+# Add custom CSS to hide the GitHub icon
+hide_github_icon = """
+#GithubIcon {
+  visibility: hidden;
+}
+"""
+st.markdown(hide_github_icon, unsafe_allow_html=True)
+
 # --- 全局变量 ---
 # 从 Vercel 环境变量中获取 API 密钥
 api_key = os.environ.get("GOOGLE_API_KEY")
