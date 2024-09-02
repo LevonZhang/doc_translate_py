@@ -6,7 +6,6 @@ import asyncio
 import io
 import json
 import typing_extensions as typing
-import tempfile
 
 # --- 全局变量 ---
 # 从 Vercel 环境变量中获取 API 密钥
@@ -24,22 +23,57 @@ class translatePair(typing.TypedDict):
 
 # --- 全局变量 ---
 
+# 获取用户选择的语言，默认为英文
+if 'language' not in st.session_state:
+    st.session_state['language'] = 'en'
+
+# --- 语言选择器 ---
+# 语言选项
+language_options = {
+    "zh": "中文",
+    "en": "English",
+    "ja": "日本語"
+}
+
+# 创建语言选择下拉菜单
+selected_language = st.selectbox(
+    "Select Language / 语言选择 / 言語を選択",
+    list(language_options.keys()),
+    format_func=lambda x: language_options[x],
+    key='language'  # 将用户的选择存储到 st.session_state['language']
+)
+
+# 从 session state 获取语言 (如果用户已经选择了语言，则使用用户的选择)
+if 'language' in st.session_state:
+    selected_language = st.session_state['language']
+
+def load_locale(language='en'):
+    """加载指定语言的文本"""
+    try:
+        with open(f'locales/{language}.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}  # 返回空字典，如果找不到语言文件
+    
+# 加载语言文件
+locale = load_locale(selected_language)
+
 # Streamlit 应用标题
-st.title("Word Document Translation")
+st.title(locale.get("title", "Word Document Translation"))
 
 # 文件上传
-uploaded_file = st.file_uploader("Upload Word Document (.docx)", type=["docx"])
+uploaded_file = st.file_uploader(locale.get("upload_file", "Upload Word Document (.docx)"), type=["docx"])
 
 # 目标语言选择
 target_language = st.selectbox(
-    "Select Target Language", ["zh-CN", "en", "ja", "ko", "fr", "de", "es"]
+    locale.get("select_target_language", "Select Target Language"), ["zh-CN", "en", "ja", "ko", "fr", "de", "es"]
 )
 
 # 双语模式选择
-bilingual = st.checkbox("Bilingual Mode", False)
+bilingual = st.checkbox(locale.get("bilingual_mode", "Bilingual Mode"), False)
 
 # --- 翻译进度条 ---
-progress_bar = st.progress(0, text="Preparing to translate...")
+progress_bar = st.progress(0, text=locale.get("preparing", "Preparing..."))
 progress_lock = asyncio.Lock()
 
 # 设置 API 密钥
@@ -58,7 +92,13 @@ async def update_progress(completed):
     """更新进度条"""
     async with progress_lock:
         progress = int(completed)
-        progress_bar.progress(progress, text=f"Completed ({progress}%)...")
+        progress_bar.progress(progress, text=locale.get("completed", "Completed ({}%)...").format(progress))
+
+async def update_progress_text(completed,text):
+    """更新进度条"""
+    async with progress_lock:
+        progress = int(completed)
+        progress_bar.progress(progress, text)
 
 
 async def translate_text(texts, start_progress, end_progress):
@@ -230,6 +270,7 @@ async def translate_subdocument(document, start_paragraph, end_paragraph, start_
 
 async def translate_document(document):
     """将文档分割成多个部分并翻译"""
+    update_progress_text(0, text=locale.get("preparing", "Preparing..."))
     # 设置每个部分的最大字节大小
     max_part_size = 1024 * 1024  # 1MB
 
@@ -252,7 +293,6 @@ async def translate_document(document):
     # 计算需要分割的份数
     num_parts = (total_paragraphs + paragraphs_per_part - 1) // paragraphs_per_part
 
-    translated_parts = []
     current_paragraph = 0
     start_progress = 0
     for i in range(num_parts):
@@ -265,13 +305,14 @@ async def translate_document(document):
         current_paragraph = part_end_paragraph
         start_progress = end_progress
 
+    update_progress_text(100, text=locale.get("preparing_download", "Preparing for download..."))
     return document
 
 # 初始化翻译状态
 is_translating = False
 
 # 翻译按钮
-if st.button("Translate Now", disabled=is_translating) and uploaded_file is not None:
+if st.button(locale.get("translate_now", "Translate Now"), disabled=is_translating) and uploaded_file is not None:
     try:
         # 设置翻译状态为 True
         is_translating = True
@@ -289,13 +330,13 @@ if st.button("Translate Now", disabled=is_translating) and uploaded_file is not 
 
         # 提供下载链接
         st.download_button(
-            label="Download",
+            label=locale.get("download", "Download"),
             data=output.getvalue(),
             file_name=f"Translated_{uploaded_file.name}",
         )
 
     except Exception as e:
-        st.error(f"Error during translation：{e}")
+        locale.get("error_during_translation", "Error during translation: {}").format(e)
         st.exception(e)  # 显示完整的错误堆栈
         
     finally:

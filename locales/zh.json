@@ -1,0 +1,13 @@
+{
+    "title": "Word 文档翻译",
+    "upload_file": "上传 Word 文档 (.docx)",
+    "select_target_language": "选择目标语言",
+    "bilingual_mode": "双语模式",
+    "preparing": "准备中...",
+    "completed": "已完成 ({}%)...",
+    "translate_now": "立即翻译",
+    "download": "下载",
+    "preparing_download": "准备下载...",
+    "error_during_translation": "翻译过程中出错：{}",
+    "api_key_error": "未设置 GOOGLE_API_KEY 环境变量！"
+}

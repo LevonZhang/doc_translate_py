@@ -1,0 +1,13 @@
+{
+    "title": "Word Document Translation",
+    "upload_file": "Upload Word Document (.docx)",
+    "select_target_language": "Select Target Language",
+    "bilingual_mode": "Bilingual Mode",
+    "preparing": "Preparing...",
+    "completed": "Completed ({}%)...",
+    "translate_now": "Translate Now",
+    "download": "Download",
+    "preparing_download": "Preparing for download...",
+    "error_during_translation": "Error during translation: {}",
+    "api_key_error": "GOOGLE_API_KEY environment variable is not set!"
+}

@@ -1,0 +1,13 @@
+{
+    "title": "Word 文档翻訳",
+    "upload_file": "Word 文書をアップロード (.docx)",
+    "select_target_language": "対象言語を選択",
+    "bilingual_mode": "バイリンガルモード",
+    "preparing": "準備中...",
+    "completed": "完了 ({}%)...",
+    "translate_now": "翻訳開始",
+    "download": "ダウンロード",
+    "preparing_download": "ダウンロードの準備をしています...",
+    "error_during_translation": "翻訳中にエラーが発生しました：{}",
+    "api_key_error": "GOOGLE_API_KEY 環境変数が設定されていません！"
+}
