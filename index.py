@@ -13,6 +13,7 @@ hide_streamlit_style = """
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+.main {margin-top: 0px;}
 </style>
 
 """
