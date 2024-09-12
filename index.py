@@ -74,7 +74,7 @@ locale = load_locale(selected_language)
 st.title(locale.get("title", "Word Document Translation"))
 
 # 文件上传
-uploaded_file = st.file_uploader(locale.get("upload_file", "Upload Word Document (.docx)"), type=["docx","doc"])
+uploaded_file = st.file_uploader(locale.get("upload_file", "Upload Word Document (.docx)"), type=["docx"])
 
 # 目标语言选择
 target_language = st.selectbox(
