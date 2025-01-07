@@ -1,11 +1,11 @@
 import streamlit as st
 from docx import Document
-import google.generativeai as genai
 import os
 import asyncio
 import io
 import json
 import typing_extensions as typing
+import groq  # 新增
 
 # Add custom CSS to hide the GitHub icon
 hide_streamlit_style = """
@@ -20,12 +20,30 @@ header {visibility: hidden;}
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 
 # --- 全局变量 ---
-# 从 Vercel 环境变量中获取 API 密钥
-api_key = os.environ.get("GOOGLE_API_KEY")
+# 尝试从不同来源获取 API 密钥
+def get_api_key():
+    # 首先尝试从环境变量获取
+    api_key = os.environ.get("GROQ_API_KEY")
+    
+    # 如果环境变量中没有，尝试从本地文件读取
+    if not api_key:
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    if line.startswith('GROQ_API_KEY='):
+                        api_key = line.split('=')[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+    
+    return api_key
+
+# 获取 API 密钥
+api_key = get_api_key()
 
 # 检查是否成功获取 API 密钥
 if not api_key:
-    st.error("GOOGLE_API_KEY environment variable is not set!")
+    st.error("GROQ_API_KEY not found! Please set it in environment variables or .env file")
     st.stop()  # 停止应用加载
 
 class translatePair(typing.TypedDict):
@@ -88,16 +106,11 @@ bilingual = st.checkbox(locale.get("bilingual_mode", "Bilingual Mode"), False)
 progress_bar = st.progress(0, text=locale.get("preparing", "Preparing..."))
 progress_lock = asyncio.Lock()
 
-# 设置 API 密钥
-genai.configure(api_key=api_key)
-
-# 选择 Gemini Pro 模型
-model = genai.GenerativeModel(
-    "gemini-1.5-flash",
-    generation_config={
-        "response_mime_type": "application/json",
-        "response_schema": list[translatePair],
-    },
+# 新增 qroq 客户端初始化
+client = groq.Client(
+    api_key=api_key,
+    timeout=120.0,  # 设置超时时间
+    max_retries=3   # 设置重试次数
 )
 
 async def update_progress(completed):
@@ -164,6 +177,7 @@ async def translate_text(texts, start_progress, end_progress):
     error_message = st.empty() 
     for batch_index, batch in enumerate(batches):
         retry_count = 0
+        last_error = None  # 添加变量来存储最后一个错误
         # 计算当前批次的进度范围
         batch_start = int(batch_index / total_batches * 100)
         batch_end = int((batch_index + 1) / total_batches * 100)
@@ -181,8 +195,13 @@ async def translate_text(texts, start_progress, end_progress):
         
         while retry_count < max_retries:
             try:
-                response = model.generate_content(batch_prompt)
-                batch_translations = response.text
+                response = await client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[{"role": "user", "content": batch_prompt}],
+                    response_format={"type": "json_object"}
+                )
+                batch_translations = response.choices[0].message.content
+                
                 await update_progress(actual_start + 0.9 * batch_size)
 
                 # 移除 ```json ``` 包装
@@ -199,15 +218,24 @@ async def translate_text(texts, start_progress, end_progress):
                 await update_progress(actual_end)
                 error_message.empty()  # 清除错误信息
                 break  # 翻译成功，退出循环
+            except groq.APIConnectionError as e:
+                retry_count += 1
+                last_error = e  # 保存错误
+                error_msg = f"API Connection Error in batch {batch_index + 1}, attempt {retry_count}/{max_retries}: {str(e)}"
+                st.warning(error_msg)
+                if retry_count < max_retries:
+                    await asyncio.sleep(2 ** retry_count)  # 指数退避
             except Exception as e:
                 retry_count += 1
-                st.warning(f"Error parsing JSON for batch {batch_index + 1} , retrying attempt {retry_count} ...")  # 显示完整的错误堆栈
+                last_error = e  # 保存错误
+                error_msg = f"Error in batch {batch_index + 1}, attempt {retry_count}/{max_retries}: {str(e)}"
+                st.warning(error_msg)
+                st.exception(e)
                 
         if retry_count == max_retries:
-            error_message.error(
-                f"Batch {batch_index + 1} translation failed, maximum retries ({max_retries}) reached"
-            )
-            raise Exception(f"Batch {batch_index + 1} translation failed")  # 抛出异常
+            final_error = f"Batch {batch_index + 1} failed after {max_retries} attempts. Last error: {str(last_error)}"
+            error_message.error(final_error)
+            raise Exception(final_error)
 
     translations.sort(key=lambda x: int(x["index"]))  # 将 index 转换为整数
     return translations
@@ -282,7 +310,7 @@ async def translate_subdocument(document, start_paragraph, end_paragraph, start_
 
 async def translate_document(document):
     """将文档分割成多个部分并翻译"""
-    update_progress_text(0, text=locale.get("preparing", "Preparing..."))
+    await update_progress_text(0, text=locale.get("preparing", "Preparing..."))
     # 设置每个部分的最大字节大小
     max_part_size = 1024 * 1024  # 1MB
 
@@ -317,7 +345,7 @@ async def translate_document(document):
         current_paragraph = part_end_paragraph
         start_progress = end_progress
 
-    update_progress_text(100, text=locale.get("preparing_download", "Preparing for download..."))
+    await update_progress_text(100, text=locale.get("preparing_download", "Preparing for download..."))
     return document
 
 # 初始化翻译状态

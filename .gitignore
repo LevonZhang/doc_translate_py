@@ -1,1 +1,6 @@
-venv
+.venv
+# 环境变量文件
+.env
+.devcontainer
+imeout
+vscode

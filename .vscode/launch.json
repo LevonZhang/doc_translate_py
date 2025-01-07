@@ -5,16 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python:Streamlit",
-            "type": "debugpy",
+            "name": "Python: Current File",
+            "type": "python",
             "request": "launch",
-            "module": "streamlit",
-            "args": [
-                "run",
-                "/workspaces/doc_translate_py/index.py",
-                "--server.port",
-                "8501"
-            ]
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PIP_INDEX_URL": "https://pypi.tuna.tsinghua.edu.cn/simple",
+                "PIP_TRUSTED_HOST": "pypi.tuna.tsinghua.edu.cn"
+            }
         }
     ]
 }
